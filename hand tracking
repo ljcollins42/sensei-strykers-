@@ -1,0 +1,79 @@
+
+import cv2
+import mediapipe as mp
+import socket
+import json
+import math
+
+# === Network Setup ===
+UDP_IP = "127.0.0.1"  # Unity IP
+UDP_PORT = 5065       # Port used in Unity
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# === MediaPipe Setup ===
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=2,
+    min_detection_confidence=0.9,
+    min_tracking_confidence=0.9,
+)
+mp_draw = mp.solutions.drawing_utils
+
+# === Average Depth ===
+average_hand_depth=0
+
+# === Webcam Setup ===
+cap = cv2.VideoCapture(0)
+cap.set(3, 720)  # Width
+cap.set(4, 640)  # Height
+
+print("[INFO] Two-hand tracking started...")
+
+while True:
+    success, frame = cap.read()
+    if not success:
+        print("[ERROR] Failed to read frame.")
+        break
+
+    frame = cv2.flip(frame, 1)  # Mirror image
+    h, w, _ = frame.shape
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    results = hands.process(rgb)
+    hands_data = []
+
+    if results.multi_hand_landmarks and results.multi_handedness:
+        for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
+            label = handedness.classification[0].label  # "Left" or "Right"
+
+            landmarks = []
+            for id, lm in enumerate(hand_landmarks.landmark):
+                if id==0 or id==9:
+                    landmarks.append({
+                        'id': id,
+                        'x': int(lm.x * w),
+                        'y': int(lm.y * h),
+                        'z': lm.z*100 # Keep z as float (depth)
+                    })
+
+            hands_data.append({
+                'hand': label,
+                'landmarks': landmarks
+            })
+
+            # Draw landmarks on frame
+            mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+    # Send data to Unity if at least one hand is tracked
+    if hands_data:
+        message = json.dumps({'hands': hands_data})
+        sock.sendto(message.encode(), (UDP_IP, UDP_PORT))
+
+    # Show camera feed
+    cv2.imshow("Hand Tracking - Two Hands", frame)
+    if cv2.waitKey(1) & 0xFF == 27:  # ESC to quit
+        break
+
+cap.release()
+cv2.destroyAllWindows()
