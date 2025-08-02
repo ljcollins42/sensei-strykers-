@@ -1,0 +1,115 @@
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using UnityEngine;
+
+public class DualHandController : MonoBehaviour
+{
+    UdpClient client;
+    Thread receiveThread;
+    public int port = 5065;
+
+    public GameObject leftGlove;
+    public GameObject rightGlove;
+    public GameObject handBase;
+
+    public int screenWidth = 640;
+    public int screenHeight = 480;
+
+    [System.Serializable]
+    public class Landmark
+    {
+        public int id;
+        public int x;
+        public int y;
+        public float z;
+    }
+
+    [System.Serializable]
+    public class HandData
+    {
+        public string hand; // "Left" or "Right"
+        public List<Landmark> landmarks;
+    }
+
+    [System.Serializable]
+    public class HandTrackingData
+    {
+        public List<HandData> hands;
+    }
+
+    private HandTrackingData currentData = new HandTrackingData();
+
+    void Start()
+    {
+        client = new UdpClient(port);
+        receiveThread = new Thread(ReceiveData);
+        receiveThread.IsBackground = true;
+        receiveThread.Start();
+    }
+
+    void ReceiveData()
+    {
+        IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, port);
+        while (true)
+        {
+            try
+            {
+                byte[] data = client.Receive(ref anyIP);
+                string json = Encoding.UTF8.GetString(data);
+                currentData = JsonUtility.FromJson<HandTrackingData>(json);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("UDP Receive Error: " + ex.Message);
+            }
+        }
+    }
+
+    void OnApplicationQuit()
+    {
+        receiveThread?.Abort();
+        client?.Close();
+    }
+
+    void Update()
+    {
+        if (currentData.hands == null)
+            return;
+
+        if (currentData.hands.Count == 0){
+            Vector3 startPos = new Vector3(-0.835834f, 1.454198f, 0.2228477f);
+            handBase.transform.position = startPos;
+        }
+
+        foreach (var hand in currentData.hands)
+        {
+            Landmark knuckle = hand.landmarks.Find(l => l.id == 9); // knuckle
+
+            if (knuckle == null) continue;
+
+            float normX = (float)knuckle.x / screenWidth;
+            float normY = (float)knuckle.y / screenHeight;
+
+            float posX = Mathf.Lerp(-5f, 5f, normX);
+            float posY = Mathf.Lerp(0f, 5f, 1f - normY);
+            float posZ = Mathf.Clamp(knuckle.z, -3f, 3f);
+            print("Raw Wrist: " + knuckle.z);
+
+            Vector3 targetPos = new Vector3(posX, posY, -posZ);
+
+            if (hand.hand == "Left" && leftGlove != null)
+                leftGlove.transform.position = targetPos;
+
+            if (hand.hand == "Right" && rightGlove != null)
+                rightGlove.transform.position = targetPos;
+        }
+    }
+
+    float MapRange(float value, float inMin, float inMax, float outMin, float outMax)
+    {
+        return (value - inMin) / (inMax - inMin) * (outMax - outMin) + outMin;
+    }
+}
