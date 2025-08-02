@@ -1,0 +1,61 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+
+
+
+public class NewBehaviourScript : MonoBehaviour
+{
+    // Start is called before the first frame update
+    public int round = 1;
+    public int time;
+    public float countdown_time;
+    public int target_score;
+    public collisi collisi;
+    public TMP_Text countdownText;
+    public TMP_Text targetscoreText;
+    public TMP_Text gameoverText;
+
+    void Start()
+    {
+        time = 10;
+        countdown_time = time;
+        target_score = 5;
+
+        Debug.Log ("round 1");
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        countdownText.text = countdown_time.ToString();
+        targetscoreText.text = target_score.ToString();
+         if(countdown_time > 0)
+         {
+            countdown_time -= Time.deltaTime;
+         }
+         if (countdown_time <= 0 && collisi.counter == target_score)
+            {
+                time -=2;
+                countdown_time = time;
+                target_score +=5;
+                round = round+1;
+                Debug.Log ("round"+ round);
+             }
+
+          else if (countdown_time <= 0 && collisi.counter != target_score)
+             {
+                Debug.Log("game over");
+                gameoverText.text = "game over";
+                
+             }
+
+        
+
+
+
+    }
+}
